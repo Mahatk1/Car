@@ -176,7 +176,7 @@ function renderResults(data) {
   renderComplaints(complaints);
   renderMarketData(marketData);
   renderImages(images, vinData);
-  renderAiSummary(aiSummary);
+  renderAiSummary(aiSummary, recalls, complaints);
 
   $('results').classList.remove('hidden');
 }
@@ -398,26 +398,64 @@ function renderImages(images, vinData) {
 }
 
 /* ── AI Summary ──────────────────────────────────────── */
-function renderAiSummary(ai) {
+function renderAiSummary(ai, recalls, complaints) {
   const body    = $('aiBody');
   const verdict = $('verdictBadge');
 
   if (!ai || !ai.available) {
-    body.innerHTML = noData(ai?.message || 'AI analysis not available. Add an ANTHROPIC_API_KEY to enable buying recommendations.');
-    verdict.classList.add('hidden');
+    // Show a conservative manual notice when no AI key is set
+    const hasRecalls    = Array.isArray(recalls) && recalls.length > 0;
+    const hasIncidents  = complaints && (complaints.crashes > 0 || complaints.fires > 0 || complaints.deaths > 0);
+    const dataLimited   = !Array.isArray(recalls) || complaints === null;
+
+    let manualVerdict, manualCls;
+    if (hasRecalls || hasIncidents) {
+      manualVerdict = 'PROCEED WITH CAUTION'; manualCls = 'caution';
+    } else if (dataLimited) {
+      manualVerdict = 'PROCEED WITH CAUTION'; manualCls = 'caution';
+    } else {
+      manualVerdict = 'PROCEED WITH CAUTION'; manualCls = 'caution';
+    }
+
+    verdict.className = `verdict-badge ${manualCls}`;
+    verdict.innerHTML = `<span class="verdict-dot"></span>${escHtml(manualVerdict)}`;
+    verdict.classList.remove('hidden');
+
+    body.innerHTML = `
+      <div class="ai-body">
+        <p>${escHtml(ai?.message || 'AI analysis not available. Add an ANTHROPIC_API_KEY to enable full buying recommendations.')}</p>
+        <div class="data-gap-notice">
+          <strong>Important — what this report cannot tell you:</strong>
+          <ul>
+            <li>Whether this vehicle was in an accident</li>
+            <li>Whether it has a salvage, rebuilt, or flood title</li>
+            <li>Whether it was written off by an insurance company</li>
+            <li>Whether the odometer has been tampered with</li>
+          </ul>
+          <p>The above data only exists in paid vehicle history services (Carfax, AutoCheck). Zero NHTSA complaints does <em>not</em> mean the car is clean — it means no complaints were filed with the government. Always verify with a paid report and a mechanic inspection before purchasing.</p>
+        </div>
+      </div>`;
+    body.className = 'card-body';
     return;
   }
 
-  // Detect verdict
+  // Detect verdict from AI text — require full phrase match, not partial
   const text = ai.summary || '';
   let cls = null, label = null;
 
-  if (/\bAVOID\b/i.test(text)) {
+  if (/\bAVOID\b/.test(text)) {
     cls = 'avoid'; label = 'Avoid';
-  } else if (/PROCEED\s+WITH\s+CAUTION/i.test(text) || /\bCAUTION\b/i.test(text)) {
+  } else if (/PROCEED\s+WITH\s+CAUTION/.test(text)) {
     cls = 'caution'; label = 'Proceed with Caution';
-  } else if (/GOOD\s+BUY/i.test(text)) {
-    cls = 'good'; label = 'Good Buy';
+  } else if (/\bGOOD\s+BUY\b/.test(text)) {
+    // Only show GOOD BUY if there are genuinely no open recalls and no severe incidents
+    const noOpenRecalls  = Array.isArray(recalls) && recalls.length === 0;
+    const noSevere       = !complaints || (complaints.crashes === 0 && complaints.fires === 0 && complaints.deaths === 0);
+    if (noOpenRecalls && noSevere) {
+      cls = 'good'; label = 'Good Buy';
+    } else {
+      cls = 'caution'; label = 'Proceed with Caution';
+    }
   }
 
   if (cls) {
@@ -428,7 +466,6 @@ function renderAiSummary(ai) {
     verdict.classList.add('hidden');
   }
 
-  // Render markdown-lite: bold, bullet points, sections
   body.innerHTML = `<div class="ai-body">${markdownLite(text)}</div>`;
   body.className = 'card-body';
 }

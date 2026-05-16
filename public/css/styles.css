@@ -594,6 +594,83 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
 .verdict-badge.caution .verdict-dot { background: var(--amber); }
 .verdict-badge.avoid   .verdict-dot { background: var(--red); }
 
+/* ── Report Limitations Card ──────────────────────────── */
+.limitations-card {
+  border-color: #78350f;
+  background: linear-gradient(135deg, #0f1623 0%, #1a1005 100%);
+}
+.limitations-card:hover { border-color: #92400e; }
+.limitations-card .card-header { background: #1c1003; border-bottom-color: #78350f; }
+.card-icon-wrap.warn-icon { background: #2d1a00; color: var(--amber); }
+
+.not-carfax-badge {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #2d1a00;
+  border: 1px solid #78350f;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.limitations-intro {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+.limitations-intro strong { color: var(--text); }
+
+.limitations-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.limitations-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.855rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.limitations-list li strong { color: var(--text); }
+.lim-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  margin-top: 1px;
+}
+.lim-warn { background: #3b1208; color: #f87171; border: 1px solid #7f1d1d; }
+.lim-ok   { background: #052e16; color: #6ee7b7; border: 1px solid #14532d; }
+
+.limitations-cta {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #1c1003;
+  border: 1px solid #78350f;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: #fcd34d;
+  line-height: 1.6;
+}
+.limitations-cta svg { flex-shrink: 0; margin-top: 2px; color: var(--amber); }
+.limitations-cta em { font-style: italic; }
+
 /* ── Red Flag Items ───────────────────────────────────── */
 .red-flag-item {
   display: flex;
@@ -608,6 +685,23 @@ button { cursor: pointer; font-family: inherit; border: none; background: none; 
   color: #fca5a5;
 }
 .red-flag-item .icon { color: var(--red); flex-shrink: 0; }
+
+/* ── Data Gap Notice (inside AI card) ────────────────── */
+.data-gap-notice {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: #1c1003;
+  border: 1px solid #78350f;
+  border-radius: var(--radius-sm);
+  font-size: 0.84rem;
+  color: #fcd34d;
+  line-height: 1.65;
+}
+.data-gap-notice strong { color: #fef3c7; display: block; margin-bottom: 8px; }
+.data-gap-notice ul { padding-left: 18px; margin: 8px 0; }
+.data-gap-notice li { margin-bottom: 4px; color: var(--amber); }
+.data-gap-notice p  { color: #fcd34d; margin-top: 10px; }
+.data-gap-notice em { font-style: italic; font-weight: 600; }
 
 /* ── Modal ────────────────────────────────────────────── */
 .modal {
