@@ -4,7 +4,7 @@ const { decodeVin, getRecalls, getComplaints } = require('../services/nhtsaServi
 const { getMarketData }        = require('../services/marketService');
 const { getVehicleImages }     = require('../services/imageService');
 const { generateVehicleSummary } = require('../services/aiService');
-const { getCachedVin, saveVinLookup, getRecentLookups } = require('../db/database');
+const { getCachedVin, saveVinLookup, getRecentLookups, testConnection } = require('../db/database');
 
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/;
 
@@ -15,12 +15,13 @@ function validateVin(vin) {
   return null;
 }
 
-router.get('/health', (req, res) => {
+router.get('/health', async (req, res) => {
+  const dbConnected = process.env.DATABASE_URL ? await testConnection() : false;
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     features: {
-      database:   !!process.env.DATABASE_URL,
+      database:   dbConnected,
       ai:         !!process.env.ANTHROPIC_API_KEY,
       marketData: !!process.env.MARKETCHECK_API_KEY,
       images:     !!process.env.UNSPLASH_ACCESS_KEY
