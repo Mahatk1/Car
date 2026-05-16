@@ -1,4 +1,4 @@
-/* ── VIN Validation ──────────────────────────────────── */
+/* ── VIN Validation ──────────────────────────────────────── */
 const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/;
 
 const TRANSLITERATE = {
@@ -34,9 +34,9 @@ function validateVin(raw) {
   return { ok: true, msg: '✓ Valid VIN format', vin };
 }
 
-/* ── DOM Helpers ─────────────────────────────────────── */
-const $  = id => document.getElementById(id);
-const na = v  => (v == null || v === '') ? '<span class="na">Not Available</span>' : escHtml(v);
+/* ── DOM Helpers ─────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const na = v => (v == null || v === '') ? '<span class="na">Not Available</span>' : escHtml(v);
 
 function escHtml(s) {
   return String(s)
@@ -56,58 +56,111 @@ function formatNum(n) {
   return Number(n).toLocaleString('en-US');
 }
 
-/* ── VIN Input Logic ─────────────────────────────────── */
+/* ── VIN Input ───────────────────────────────────────────── */
 const vinInput    = $('vinInput');
-const charCounter = $('charCounter');
-const vinStatus   = $('vinStatus');
+const charCount   = $('charCount');
+const searchStatus = $('searchStatus');
 
 vinInput.addEventListener('input', () => {
   const raw = vinInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (vinInput.value !== raw) vinInput.value = raw;
 
   const len = raw.length;
-  charCounter.textContent = `${len} / 17`;
+  charCount.textContent = `${len}/17`;
 
-  vinStatus.className = 'vin-status';
+  searchStatus.className = 'search-status';
   vinInput.classList.remove('valid', 'invalid');
 
-  if (!raw) { vinStatus.textContent = ''; return; }
+  if (!raw) { searchStatus.textContent = ''; return; }
 
   const v = validateVin(raw);
-  vinStatus.textContent = v.msg;
+  searchStatus.textContent = v.msg;
 
   if (len === 17) {
     if (v.ok && !v.warn) {
       vinInput.classList.add('valid');
-      vinStatus.classList.add('ok');
+      searchStatus.classList.add('ok');
     } else if (v.ok && v.warn) {
       vinInput.classList.add('invalid');
-      vinStatus.classList.add('warn');
+      searchStatus.classList.add('warn');
     } else {
       vinInput.classList.add('invalid');
-      vinStatus.classList.add('error');
+      searchStatus.classList.add('error');
     }
   }
 });
 
-/* ── Form Submit ─────────────────────────────────────── */
+/* ── Example VIN Chips ───────────────────────────────────── */
+document.querySelectorAll('.example-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const vin = chip.dataset.vin;
+    vinInput.value = vin;
+    vinInput.dispatchEvent(new Event('input'));
+    lookupVin(vin);
+  });
+});
+
+/* ── Form Submit ─────────────────────────────────────────── */
 $('vinForm').addEventListener('submit', async e => {
   e.preventDefault();
   const raw = vinInput.value.trim().toUpperCase().replace(/[\s-]/g, '');
 
   const v = validateVin(raw);
   if (!v.ok && !v.warn) {
-    vinStatus.textContent = v.msg || 'Please enter a valid 17-character VIN';
-    vinStatus.className   = 'vin-status error';
+    searchStatus.textContent = v.msg || 'Please enter a valid 17-character VIN';
+    searchStatus.className   = 'search-status error';
     return;
   }
 
   await lookupVin(v.vin || raw);
 });
 
-/* ── API Lookup ──────────────────────────────────────── */
+/* ── Loading Steps ───────────────────────────────────────── */
+const STEP_DELAYS = [0, 600, 1400, 2200, 3200];
+let stepTimers = [];
+
+function startLoadingSteps(vin) {
+  $('loadingVinText').textContent = `Researching ${vin}…`;
+
+  // Reset all steps
+  for (let i = 0; i < 5; i++) {
+    const step = $(`step-${i}`);
+    step.className = 'loading-step';
+    step.querySelector('.step-icon').className = 'step-icon';
+  }
+
+  stepTimers.forEach(t => clearTimeout(t));
+  stepTimers = [];
+
+  STEP_DELAYS.forEach((delay, i) => {
+    const t = setTimeout(() => {
+      // Mark previous step done
+      if (i > 0) {
+        const prev = $(`step-${i - 1}`);
+        prev.className = 'loading-step done';
+        prev.querySelector('.step-icon').className = 'step-icon done';
+      }
+      // Mark current step active
+      const cur = $(`step-${i}`);
+      cur.className = 'loading-step active';
+      cur.querySelector('.step-icon').className = 'step-icon active';
+    }, delay);
+    stepTimers.push(t);
+  });
+}
+
+function finishLoadingSteps() {
+  stepTimers.forEach(t => clearTimeout(t));
+  for (let i = 0; i < 5; i++) {
+    const step = $(`step-${i}`);
+    step.className = 'loading-step done';
+    step.querySelector('.step-icon').className = 'step-icon done';
+  }
+}
+
+/* ── API Lookup ──────────────────────────────────────────── */
 async function lookupVin(vin) {
-  setLoading(true);
+  setLoading(true, vin);
   hideError();
   hideResults();
 
@@ -125,6 +178,9 @@ async function lookupVin(vin) {
       return;
     }
 
+    finishLoadingSteps();
+    await new Promise(r => setTimeout(r, 400));
+
     renderResults(data);
     setTimeout(() => $('results').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
 
@@ -135,12 +191,15 @@ async function lookupVin(vin) {
   }
 }
 
-/* ── Loading State ───────────────────────────────────── */
-function setLoading(on) {
+/* ── Loading State ───────────────────────────────────────── */
+function setLoading(on, vin = '') {
   const btn = $('searchBtn');
   btn.disabled = on;
   btn.classList.toggle('loading', on);
   vinInput.disabled = on;
+
+  $('loadingSection').classList.toggle('hidden', !on);
+  if (on) startLoadingSteps(vin);
 }
 
 function hideResults() { $('results').classList.add('hidden'); }
@@ -154,9 +213,24 @@ function hideError() { $('errorBanner').classList.add('hidden'); }
 
 $('errorClose').addEventListener('click', hideError);
 
-/* ── Main Render ─────────────────────────────────────── */
+/* ── Animate Cards ───────────────────────────────────────── */
+function animateCards() {
+  const cards = document.querySelectorAll('.anim-card:not(.hidden)');
+  cards.forEach((card, i) => {
+    card.style.transitionDelay = `${i * 80}ms`;
+    setTimeout(() => card.classList.add('visible'), 50);
+  });
+}
+
+/* ── Main Render ─────────────────────────────────────────── */
 function renderResults(data) {
   const { vin, cached, cachedAt, vinData, recalls, complaints, marketData, images, aiSummary } = data;
+
+  // Reset card animations
+  document.querySelectorAll('.anim-card').forEach(c => {
+    c.classList.remove('visible');
+    c.style.transitionDelay = '';
+  });
 
   $('resultsVin').textContent = vin;
 
@@ -179,9 +253,10 @@ function renderResults(data) {
   renderAiSummary(aiSummary, recalls, complaints);
 
   $('results').classList.remove('hidden');
+  requestAnimationFrame(animateCards);
 }
 
-/* ── Vehicle Overview ────────────────────────────────── */
+/* ── Vehicle Overview ────────────────────────────────────── */
 function renderVehicleOverview(d) {
   const year  = d.year  || '';
   const make  = d.make  || '';
@@ -189,8 +264,9 @@ function renderVehicleOverview(d) {
   const trim  = d.trim  || '';
 
   const headline = [year, make, model, trim].filter(Boolean).join(' ');
-  $('vehicleHeadline').innerHTML = `<span class="year">${escHtml(year)}</span> ${escHtml([make, model, trim].filter(Boolean).join(' '))}`;
-  if (!headline) $('vehicleHeadline').innerHTML = '<span class="na">Unknown Vehicle</span>';
+  $('vehicleHeadline').innerHTML = headline
+    ? `<span class="year">${escHtml(year)}</span> ${escHtml([make, model, trim].filter(Boolean).join(' '))}`
+    : '<span class="na">Unknown Vehicle</span>';
 
   const specs = [
     ['Year',         d.year],
@@ -221,12 +297,12 @@ function renderVehicleOverview(d) {
     const warning = document.createElement('div');
     warning.className = 'red-flag-item';
     warning.style.marginBottom = '16px';
-    warning.innerHTML = `<span class="icon">⚠</span> <span><strong>VIN Decode Warning:</strong> ${escHtml(d.errorText || 'Error code ' + d.errorCode)} — some data may be incomplete or inaccurate.</span>`;
+    warning.innerHTML = `<span class="icon">⚠</span> <span><strong>VIN Decode Warning:</strong> ${escHtml(d.errorText || 'Error code ' + d.errorCode)} — some data may be incomplete.</span>`;
     $('card-overview').querySelector('.card-body').prepend(warning);
   }
 }
 
-/* ── Recalls ─────────────────────────────────────────── */
+/* ── Recalls ─────────────────────────────────────────────── */
 const URGENT_COMPONENTS = /brake|airbag|fuel|fire|steering|engine|seat|seatbelt|child/i;
 
 function renderRecalls(recalls) {
@@ -245,7 +321,7 @@ function renderRecalls(recalls) {
     return;
   }
 
-  badge.innerHTML = pill(recalls.length > 0 ? 'red' : 'green', `${recalls.length} Open Recall${recalls.length !== 1 ? 's' : ''}`);
+  badge.innerHTML = pill('red', `${recalls.length} Open Recall${recalls.length !== 1 ? 's' : ''}`);
 
   body.innerHTML = `<ul class="recall-list">${recalls.map(r => {
     const urgent = URGENT_COMPONENTS.test(r.component || '');
@@ -262,7 +338,7 @@ function renderRecalls(recalls) {
   }).join('')}</ul>`;
 }
 
-/* ── Complaints ──────────────────────────────────────── */
+/* ── Complaints ──────────────────────────────────────────── */
 function renderComplaints(c) {
   const body = $('complaintsBody');
 
@@ -277,15 +353,15 @@ function renderComplaints(c) {
     <div class="complaints-summary">
       <div class="stat-box ${c.total > 50 ? 'danger' : ''}">
         <div class="stat-value">${formatNum(c.total)}</div>
-        <div class="stat-label-sm">Total Complaints</div>
+        <div class="stat-label-sm">Total</div>
       </div>
       <div class="stat-box ${c.crashes > 0 ? 'danger' : ''}">
         <div class="stat-value">${c.crashes || 0}</div>
-        <div class="stat-label-sm">Crash Reports</div>
+        <div class="stat-label-sm">Crashes</div>
       </div>
       <div class="stat-box ${c.fires > 0 ? 'danger' : ''}">
         <div class="stat-value">${c.fires || 0}</div>
-        <div class="stat-label-sm">Fire Reports</div>
+        <div class="stat-label-sm">Fires</div>
       </div>
       <div class="stat-box ${c.deaths > 0 ? 'danger' : ''}">
         <div class="stat-value">${c.deaths || 0}</div>
@@ -295,7 +371,7 @@ function renderComplaints(c) {
 
     ${hasSevere ? `<div class="red-flag-item" style="margin-bottom:14px">
       <span class="icon">⚠</span>
-      <span>Complaints include serious incidents (crashes, fires, or fatalities). Investigate thoroughly before purchase.</span>
+      <span>Complaints include serious incidents (crashes, fires, or fatalities). Investigate thoroughly.</span>
     </div>` : ''}
 
     ${c.total === 0 ? noData('No safety complaints on file with NHTSA.', true) : ''}
@@ -313,7 +389,7 @@ function renderComplaints(c) {
       </div>` : ''}`;
 }
 
-/* ── Market Data ─────────────────────────────────────── */
+/* ── Market Data ─────────────────────────────────────────── */
 function renderMarketData(m) {
   const body = $('marketBody');
 
@@ -358,10 +434,10 @@ function renderMarketData(m) {
         </li>`).join('')}
       </ul>` : ''}
 
-    <p style="font-size:.73rem;color:var(--text-faint);margin-top:12px">Powered by Marketcheck. Prices reflect current market listings and may vary.</p>`;
+    <p style="font-size:.73rem;color:var(--text-faint);margin-top:12px">Powered by Marketcheck. Prices reflect current listings and may vary.</p>`;
 }
 
-/* ── Images ──────────────────────────────────────────── */
+/* ── Images ──────────────────────────────────────────────── */
 function renderImages(images, vinData) {
   const card = $('card-images');
   const grid = $('imagesGrid');
@@ -375,7 +451,7 @@ function renderImages(images, vinData) {
   card.classList.remove('hidden');
 
   if (images.broadSearch) {
-    note.textContent = 'Representative images — not the exact vehicle';
+    note.textContent = 'Representative images — not this exact vehicle';
   }
 
   grid.innerHTML = images.images.map(img => `
@@ -389,36 +465,26 @@ function renderImages(images, vinData) {
       </div>
     </div>`).join('');
 
-  // Lazy-load full images
   const imgs = grid.querySelectorAll('img[data-src]');
   const io = new IntersectionObserver(entries => {
-    entries.forEach(e => { if (e.isIntersecting) { e.target.src = e.target.dataset.src; io.unobserve(e.target); } });
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.src = e.target.dataset.src; io.unobserve(e.target); }
+    });
   }, { rootMargin: '200px' });
   imgs.forEach(i => io.observe(i));
 }
 
-/* ── AI Summary ──────────────────────────────────────── */
+/* ── AI Summary ──────────────────────────────────────────── */
 function renderAiSummary(ai, recalls, complaints) {
   const body    = $('aiBody');
   const verdict = $('verdictBadge');
 
   if (!ai || !ai.available) {
-    // Show a conservative manual notice when no AI key is set
-    const hasRecalls    = Array.isArray(recalls) && recalls.length > 0;
-    const hasIncidents  = complaints && (complaints.crashes > 0 || complaints.fires > 0 || complaints.deaths > 0);
-    const dataLimited   = !Array.isArray(recalls) || complaints === null;
+    const hasRecalls   = Array.isArray(recalls) && recalls.length > 0;
+    const hasIncidents = complaints && (complaints.crashes > 0 || complaints.fires > 0 || complaints.deaths > 0);
 
-    let manualVerdict, manualCls;
-    if (hasRecalls || hasIncidents) {
-      manualVerdict = 'PROCEED WITH CAUTION'; manualCls = 'caution';
-    } else if (dataLimited) {
-      manualVerdict = 'PROCEED WITH CAUTION'; manualCls = 'caution';
-    } else {
-      manualVerdict = 'PROCEED WITH CAUTION'; manualCls = 'caution';
-    }
-
-    verdict.className = `verdict-badge ${manualCls}`;
-    verdict.innerHTML = `<span class="verdict-dot"></span>${escHtml(manualVerdict)}`;
+    verdict.className = 'verdict-badge caution';
+    verdict.innerHTML = `<span class="verdict-dot"></span>Proceed with Caution`;
     verdict.classList.remove('hidden');
 
     body.innerHTML = `
@@ -435,11 +501,9 @@ function renderAiSummary(ai, recalls, complaints) {
           <p>The above data only exists in paid vehicle history services (Carfax, AutoCheck). Zero NHTSA complaints does <em>not</em> mean the car is clean — it means no complaints were filed with the government. Always verify with a paid report and a mechanic inspection before purchasing.</p>
         </div>
       </div>`;
-    body.className = 'card-body';
     return;
   }
 
-  // Detect verdict from AI text — require full phrase match, not partial
   const text = ai.summary || '';
   let cls = null, label = null;
 
@@ -448,9 +512,8 @@ function renderAiSummary(ai, recalls, complaints) {
   } else if (/PROCEED\s+WITH\s+CAUTION/.test(text)) {
     cls = 'caution'; label = 'Proceed with Caution';
   } else if (/\bGOOD\s+BUY\b/.test(text)) {
-    // Only show GOOD BUY if there are genuinely no open recalls and no severe incidents
-    const noOpenRecalls  = Array.isArray(recalls) && recalls.length === 0;
-    const noSevere       = !complaints || (complaints.crashes === 0 && complaints.fires === 0 && complaints.deaths === 0);
+    const noOpenRecalls = Array.isArray(recalls) && recalls.length === 0;
+    const noSevere      = !complaints || (complaints.crashes === 0 && complaints.fires === 0 && complaints.deaths === 0);
     if (noOpenRecalls && noSevere) {
       cls = 'good'; label = 'Good Buy';
     } else {
@@ -467,7 +530,6 @@ function renderAiSummary(ai, recalls, complaints) {
   }
 
   body.innerHTML = `<div class="ai-body">${markdownLite(text)}</div>`;
-  body.className = 'card-body';
 }
 
 function markdownLite(text) {
@@ -478,13 +540,12 @@ function markdownLite(text) {
     .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
     .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
     .replace(/\n\n+/g, '</p><p>')
-    .replace(/^(?!<[hul])(.)/gm, '$1')
     .replace(/\n/g, '<br>')
     .replace(/^(.)/,'<p>$1')
     .replace(/(.)$/,'$1</p>');
 }
 
-/* ── Shared UI Helpers ───────────────────────────────── */
+/* ── Shared UI Helpers ───────────────────────────────────── */
 function pill(cls, text) {
   return `<span class="status-pill ${cls}">${escHtml(text)}</span>`;
 }
@@ -497,10 +558,10 @@ function noData(msg, isGood = false) {
   </div>`;
 }
 
-/* ── Recent Lookups Modal ────────────────────────────── */
+/* ── Recent Modal ────────────────────────────────────────── */
 $('recentBtn').addEventListener('click', async () => {
   $('recentModal').classList.remove('hidden');
-  $('recentBody').innerHTML = '<div class="loading-placeholder">Loading…</div>';
+  $('recentBody').innerHTML = '<div class="modal-loading">Loading…</div>';
 
   try {
     const resp = await fetch('/api/vin/recent');
@@ -508,7 +569,7 @@ $('recentBtn').addEventListener('click', async () => {
     const items = data.recent || [];
 
     if (!items.length) {
-      $('recentBody').innerHTML = '<div class="loading-placeholder">No lookups yet.</div>';
+      $('recentBody').innerHTML = '<div class="modal-loading">No lookups yet.</div>';
       return;
     }
 
@@ -522,7 +583,7 @@ $('recentBtn').addEventListener('click', async () => {
       </li>`).join('')}
     </ul>`;
   } catch {
-    $('recentBody').innerHTML = '<div class="loading-placeholder">Failed to load recent lookups.</div>';
+    $('recentBody').innerHTML = '<div class="modal-loading">Failed to load recent lookups.</div>';
   }
 });
 
@@ -535,6 +596,7 @@ function loadRecentVin(el) {
 }
 
 function closeModal() { $('recentModal').classList.add('hidden'); }
+
 $('modalClose').addEventListener('click', closeModal);
-$('modalBackdrop').addEventListener('click', closeModal);
+$('modalBg').addEventListener('click', closeModal);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
